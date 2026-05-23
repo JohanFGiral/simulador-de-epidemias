@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EpiSim — Simulador de Propagación de Epidemias</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg-void: #050810;
+    --bg-deep: #080d1a;
+    --bg-panel: #0c1220;
+    --bg-card: #101828;
+    --bg-card2: #131f30;
+    --border: rgba(0,200,255,0.10);
+    --border-mid: rgba(0,200,255,0.22);
+    --border-hi: rgba(0,200,255,0.45);
+    --cyan: #00c8ff;
+    --cyan-dim: rgba(0,200,255,0.15);
+    --cyan-glow: rgba(0,200,255,0.06);
+    --green: #00e5a0;
+    --green-dim: rgba(0,229,160,0.13);
+    --red: #ff4d6d;
+    --red-dim: rgba(255,77,109,0.13);
+    --amber: #ffb347;
+    --amber-dim: rgba(255,179,71,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --text-hi: #e8f4ff;
+    --text-mid: #7a9bb5;
+    --text-lo: #3d5a72;
+    --font-head: 'Syne', sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg-void);
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
+    background-size: 48px 48px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(12px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-icon {
+    width: 38px;
+    height: 38px;
+    border: 1.5px solid var(--cyan);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .logo-icon svg { width: 20px; height: 20px; }
+
+  .logo-text { font-family: var(--font-head); font-weight: 800; font-size: 20px; letter-spacing: -0.5px; color: var(--text-hi); }
+  .logo-text span { color: var(--cyan); }
+
+  .logo-sub { font-size: 10px; color: var(--text-mid); letter-spacing: 2px; text-transform: uppercase; margin-top: 1px; }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border: 1px solid var(--border-mid);
+    color: var(--cyan);
+    background: var(--cyan-dim);
+  }
+
+  /* ── MAIN LAYOUT ── */
+  .app {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    height: calc(100vh - 73px);
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--bg-deep);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-mid) transparent;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 2px; }
+
+  /* ── SECTION HEADER ── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px 10px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--bg-deep);
+    z-index: 5;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .section-header:hover { background: rgba(0,200,255,0.04); }
+
+  .section-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .icon-cyan { background: var(--cyan-dim); border: 1px solid rgba(0,200,255,0.25); }
+  .icon-green { background: var(--green-dim); border: 1px solid rgba(0,229,160,0.25); }
+  .icon-red { background: var(--red-dim); border: 1px solid rgba(255,77,109,0.25); }
+  .icon-amber { background: var(--amber-dim); border: 1px solid rgba(255,179,71,0.25); }
+  .icon-purple { background: var(--purple-dim); border: 1px solid rgba(167,139,250,0.25); }
+
+  .section-icon svg { width: 14px; height: 14px; }
+
+  .section-title {
+    font-family: var(--font-head);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    flex: 1;
+  }
+
+  .section-title.cyan { color: var(--cyan); }
+  .section-title.green { color: var(--green); }
+  .section-title.red { color: var(--red); }
+  .section-title.amber { color: var(--amber); }
+  .section-title.purple { color: var(--purple); }
+
+  .section-chevron {
+    transition: transform 0.2s;
+    color: var(--text-lo);
+  }
+  .section-chevron.open { transform: rotate(180deg); }
+
+  /* ── SECTION BODY ── */
+  .section-body { padding: 16px 20px; display: none; }
+  .section-body.open { display: block; }
+
+  /* ── PARAM ROW ── */
+  .param-row {
+    margin-bottom: 18px;
+  }
+
+  .param-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .param-name { color: var(--text-mid); font-size: 11px; letter-spacing: 0.5px; }
+
+  .param-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--cyan);
+    min-width: 52px;
+    text-align: right;
+  }
+
+  .param-value.green { color: var(--green); }
+  .param-value.red { color: var(--red); }
+  .param-value.amber { color: var(--amber); }
+  .param-value.purple { color: var(--purple); }
+
+  /* ── SLIDER ── */
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: var(--border-mid);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"].cyan::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    border: 2px solid var(--bg-panel);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,200,255,0.5);
+  }
+
+  input[type="range"].green::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--green);
+    border: 2px solid var(--bg-panel);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0,229,160,0.5);
+  }
+
+  input[type="range"].red::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--red);
+    border: 2px solid var(--bg-panel);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255,77,109,0.5);
+  }
+
+  input[type="range"].amber::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--amber);
+    border: 2px solid var(--bg-panel);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255,179,71,0.5);
+  }
+
+  input[type="range"].purple::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--purple);
+    border: 2px solid var(--bg-panel);
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(167,139,250,0.5);
+  }
+
+  /* Firefox */
+  input[type="range"].cyan::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--cyan); border:2px solid var(--bg-panel); cursor:pointer; }
+  input[type="range"].green::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--green); border:2px solid var(--bg-panel); cursor:pointer; }
+  input[type="range"].red::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--red); border:2px solid var(--bg-panel); cursor:pointer; }
+  input[type="range"].amber::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--amber); border:2px solid var(--bg-panel); cursor:pointer; }
+  input[type="range"].purple::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:var(--purple); border:2px solid var(--bg-panel); cursor:pointer; }
+
+  /* ── NUMBER INPUT ── */
+  .number-input {
+    background: var(--bg-card);
+    border: 1px solid var(--border-mid);
+    border-radius: 6px;
+    color: var(--text-hi);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 7px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .number-input:focus { border-color: var(--cyan); }
+  .number-input::placeholder { color: var(--text-lo); }
+
+  /* ── TRANSMISION CHECKBOXES ── */
+  .transmission-grid {
+    display: grid;
+    gap: 7px;
+  }
+
+  .tx-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+  }
+
+  .tx-item:hover { border-color: var(--border-mid); background: var(--bg-card2); }
+
+  .tx-item.active { border-color: rgba(0,200,255,0.4); background: var(--cyan-dim); }
+
+  .tx-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--border-mid);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  .tx-item.active .tx-check {
+    background: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .tx-check svg { width: 10px; height: 10px; display: none; }
+  .tx-item.active .tx-check svg { display: block; }
+
+  .tx-info { flex: 1; }
+  .tx-name { font-size: 12px; color: var(--text-hi); margin-bottom: 1px; }
+  .tx-beta { font-size: 10px; color: var(--text-lo); }
+
+  .tx-weight {
+    font-size: 11px;
+    color: var(--cyan);
+    display: none;
+  }
+  .tx-item.active .tx-weight { display: block; }
+
+  /* ── INTERVENCIONES ── */
+  .interv-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    margin-bottom: 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s;
+  }
+
+  .interv-row:hover { border-color: var(--border-mid); }
+  .interv-row.active { border-color: rgba(0,229,160,0.4); background: var(--green-dim); }
+
+  .interv-toggle {
+    width: 32px;
+    height: 18px;
+    border-radius: 9px;
+    background: var(--border-mid);
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+
+  .interv-row.active .interv-toggle { background: var(--green); }
+
+  .interv-toggle::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-hi);
+    top: 3px;
+    left: 3px;
+    transition: left 0.2s;
+  }
+
+  .interv-row.active .interv-toggle::after { left: 17px; }
+
+  .interv-label { flex: 1; font-size: 12px; }
+  .interv-label span { font-size: 10px; color: var(--text-mid); display: block; }
+
+  .interv-reduction {
+    font-size: 11px;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* ── RUN BUTTON ── */
+  .run-btn {
+    margin: 16px 20px;
+    width: calc(100% - 40px);
+    padding: 13px;
+    background: linear-gradient(135deg, rgba(0,200,255,0.15), rgba(0,229,160,0.10));
+    border: 1.5px solid var(--cyan);
+    border-radius: 8px;
+    color: var(--cyan);
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .run-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(0,200,255,0.10), rgba(0,229,160,0.08));
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .run-btn:hover::before { opacity: 1; }
+  .run-btn:hover { box-shadow: 0 0 24px rgba(0,200,255,0.25); transform: translateY(-1px); }
+  .run-btn:active { transform: translateY(0); }
+
+  .run-btn.loading {
+    color: var(--text-mid);
+    border-color: var(--border-mid);
+    cursor: wait;
+    animation: loading-pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes loading-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ── MAIN PANEL ── */
+  .main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-void);
+  }
+
+  /* ── METRICS ROW ── */
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .metric-card {
+    padding: 16px 20px;
+    border-right: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card:last-child { border-right: none; }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    border-radius: 1px;
+    opacity: 0.5;
+  }
+
+  .metric-card.cyan::before { background: var(--cyan); }
+  .metric-card.green::before { background: var(--green); }
+  .metric-card.red::before { background: var(--red); }
+  .metric-card.amber::before { background: var(--amber); }
+  .metric-card.purple::before { background: var(--purple); }
+
+  .metric-label { font-size: 10px; color: var(--text-lo); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+
+  .metric-value {
+    font-family: var(--font-head);
+    font-size: 22px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .metric-value.cyan { color: var(--cyan); }
+  .metric-value.green { color: var(--green); }
+  .metric-value.red { color: var(--red); }
+  .metric-value.amber { color: var(--amber); }
+  .metric-value.purple { color: var(--purple); }
+
+  .metric-sub { font-size: 10px; color: var(--text-lo); margin-top: 4px; }
+
+  /* ── CHART AREA ── */
+  .chart-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 20px 24px;
+    gap: 16px;
+  }
+
+  .chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .chart-title {
+    font-family: var(--font-head);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-hi);
+  }
+
+  .chart-legend {
+    display: flex;
+    gap: 20px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--text-mid);
+  }
+
+  .legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .chart-wrap {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-panel);
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  /* ── R0 GAUGE ── */
+  .r0-section {
+    padding: 0 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .r0-bar-wrap {
+    height: 6px;
+    background: var(--border-mid);
+    border-radius: 3px;
+    margin: 10px 0 6px;
+    overflow: visible;
+    position: relative;
+  }
+
+  .r0-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--green), var(--amber), var(--red));
+    transition: width 0.4s ease;
+    max-width: 100%;
+  }
+
+  .r0-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-lo);
+  }
+
+  /* ── SEPARATOR ── */
+  .sep { height: 1px; background: var(--border); margin: 0; }
+
+  /* ── ALERT ── */
+  .alert {
+    display: none;
+    margin: 12px 20px;
+    padding: 10px 14px;
+    border-radius: 7px;
+    font-size: 11px;
+    border: 1px solid;
+  }
+
+  .alert.show { display: flex; align-items: center; gap: 10px; }
+  .alert.warn { border-color: rgba(255,179,71,0.4); background: var(--amber-dim); color: var(--amber); }
+  .alert.danger { border-color: rgba(255,77,109,0.4); background: var(--red-dim); color: var(--red); }
+
+  /* ── RESPONSIVE ADJUSTMENTS ── */
+  @media (max-width: 1024px) {
+    .app { grid-template-columns: 300px 1fr; }
+    .metrics-row { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  /* ── CAPACIDAD HOSPITALARIA ── */
+  .hosp-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .hosp-row label { font-size: 11px; color: var(--text-mid); white-space: nowrap; }
+  .hosp-row .number-input { max-width: 100px; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: var(--text-lo);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+
+  .empty-state svg { width: 48px; height: 48px; opacity: 0.3; }
+  .empty-state p { text-align: center; line-height: 1.6; max-width: 240px; }
+
+  /* ── SCAN LINE ANIMATION ── */
+  .chart-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.04), transparent);
+    animation: scan 4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  @keyframes scan {
+    0% { left: -60%; }
+    100% { left: 120%; }
+  }
+
+  /* ── TOOLTIP CUSTOM ── */
+  .info-tip {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--text-lo);
+    color: var(--text-lo);
+    font-size: 9px;
+    text-align: center;
+    line-height: 13px;
+    cursor: help;
+    margin-left: 5px;
+    vertical-align: middle;
+  }
+
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="10" cy="10" r="3" fill="none" stroke="#00c8ff" stroke-width="1.5"/>
+        <circle cx="10" cy="10" r="7" fill="none" stroke="#00c8ff" stroke-width="1" stroke-dasharray="3 2"/>
+        <path d="M10 3 Q13 6 10 10 Q7 14 10 17" stroke="#00e5a0" stroke-width="1.2" fill="none"/>
+        <path d="M3 10 Q6 7 10 10 Q14 13 17 10" stroke="#00e5a0" stroke-width="1.2" fill="none"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">Epi<span>Sim</span></div>
+      <div class="logo-sub">Simulador de Epidemias · Modelo SIR</div>
+    </div>
+  </div>
+  <div class="header-meta">
+    <div class="status-dot">
+      <div class="dot"></div>
+      Sistema listo
+    </div>
+    <div class="badge">v1.0</div>
+  </div>
+</header>
+
+<!-- APP -->
+<div class="app">
+
+  <!-- ══════════ SIDEBAR ══════════ -->
+  <aside class="sidebar">
+
+    <!-- R0 LIVE -->
+    <div class="r0-section" style="padding:16px 20px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+        <span style="font-size:10px;color:var(--text-lo);letter-spacing:1.5px;text-transform:uppercase;">Número Reproductivo Básico</span>
+        <span id="r0Display" style="font-family:var(--font-head);font-size:28px;font-weight:800;color:var(--cyan);">—</span>
+      </div>
+      <div class="r0-bar-wrap">
+        <div class="r0-bar-fill" id="r0Bar" style="width:0%"></div>
+      </div>
+      <div class="r0-labels">
+        <span>R₀ = 0</span><span>R₀ = 1 (umbral)</span><span>R₀ = 5+</span>
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <!-- ── SECCIÓN 1: POBLACIÓN ── -->
+    <div class="section-header" onclick="toggleSection('secPob', this)">
+      <div class="section-icon icon-cyan">
+        <svg viewBox="0 0 14 14" fill="none" stroke="#00c8ff" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="5" cy="4" r="2"/><circle cx="10" cy="4" r="2"/>
+          <path d="M1 12c0-2.2 1.8-4 4-4s4 1.8 4 4"/><path d="M10 8c1.7 0 3 1.3 3 3"/>
+        </svg>
+      </div>
+      <span class="section-title cyan">Población</span>
+      <svg class="section-chevron open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M2 4l4 4 4-4"/></svg>
+    </div>
+    <div class="section-body open" id="secPob">
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Población total (N)</span>
+          <span class="param-value cyan" id="valN">100,000</span>
+        </div>
+        <input type="range" class="cyan" id="slN" min="1000" max="10000000" step="1000" value="100000" oninput="updateSlider('N', this.value)">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text-lo)">1K</span>
+          <span style="font-size:10px;color:var(--text-lo)">10M</span>
+        </div>
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Infectados iniciales (I₀)</span>
+          <span class="param-value red" id="valI0">10</span>
+        </div>
+        <input type="range" class="red" id="slI0" min="1" max="1000" step="1" value="10" oninput="updateSlider('I0', this.value)">
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Cobertura de vacunación (p_vac)</span>
+          <span class="param-value green" id="valVac">0%</span>
+        </div>
+        <input type="range" class="green" id="slVac" min="0" max="100" step="1" value="0" oninput="updateSlider('Vac', this.value)">
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Duración simulación (días)</span>
+          <span class="param-value amber" id="valDias">180</span>
+        </div>
+        <input type="range" class="amber" id="slDias" min="30" max="730" step="5" value="180" oninput="updateSlider('Dias', this.value)">
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Capacidad hospitalaria</span>
+        </div>
+        <div class="hosp-row">
+          <input type="number" class="number-input" id="hospCap" placeholder="ej. 5000" value="5000" min="0">
+          <label>personas</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN 2: MODELO SIR ── -->
+    <div class="section-header" onclick="toggleSection('secSIR', this)">
+      <div class="section-icon icon-cyan">
+        <svg viewBox="0 0 14 14" fill="none" stroke="#00c8ff" stroke-width="1.5" stroke-linecap="round">
+          <path d="M1 10 Q4 2 7 7 Q10 12 13 4"/>
+        </svg>
+      </div>
+      <span class="section-title cyan">Modelo SIR</span>
+      <svg class="section-chevron open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M2 4l4 4 4-4"/></svg>
+    </div>
+    <div class="section-body open" id="secSIR">
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">β efectivo (tasa de contagio)
+            <span class="info-tip" title="Número de contagios por infectado por día. Se ajusta automáticamente según vías de transmisión seleccionadas.">?</span>
+          </span>
+          <span class="param-value cyan" id="valBeta">0.30</span>
+        </div>
+        <input type="range" class="cyan" id="slBeta" min="0.01" max="1.00" step="0.01" value="0.30" oninput="updateSlider('Beta', this.value)">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text-lo)">0.01</span>
+          <span style="font-size:10px;color:var(--text-lo)">1.00</span>
+        </div>
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">γ (tasa de recuperación)
+            <span class="info-tip" title="Inverso de la duración media de la enfermedad. γ = 1/días_enfermedad">?</span>
+          </span>
+          <span class="param-value green" id="valGamma">0.10</span>
+        </div>
+        <input type="range" class="green" id="slGamma" min="0.01" max="0.50" step="0.01" value="0.10" oninput="updateSlider('Gamma', this.value)">
+      </div>
+
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:7px;padding:10px 12px;font-size:11px;color:var(--text-mid);">
+        <span style="color:var(--text-lo);">Duración media enfermedad:</span>
+        <span id="durEnf" style="color:var(--amber);font-weight:700;margin-left:6px;">10.0 días</span>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN 3: TRANSMISIÓN ── -->
+    <div class="section-header" onclick="toggleSection('secTx', this)">
+      <div class="section-icon icon-red">
+        <svg viewBox="0 0 14 14" fill="none" stroke="#ff4d6d" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="7" cy="7" r="2"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.2 3.2l1.4 1.4M9.4 9.4l1.4 1.4M9.4 4.6L8 6M6 8l-1.4 1.4"/>
+        </svg>
+      </div>
+      <span class="section-title red">Vías de Transmisión</span>
+      <svg class="section-chevron open" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M2 4l4 4 4-4"/></svg>
+    </div>
+    <div class="section-body open" id="secTx">
+
+      <div style="font-size:10px;color:var(--text-lo);margin-bottom:10px;line-height:1.6;">
+        Las vías <span style="color:var(--green);">aditivas</span> se suman — más vías activas = mayor β. Las vías <span style="color:var(--amber);">exclusivas</span> son rutas específicas que no potencian las aditivas; combinar rutas biológicamente opuestas aplica una penalización.
+      </div>
+
+      <div class="transmission-grid" id="txGrid">
+        <!-- generado por JS -->
+      </div>
+
+      <div style="margin-top:12px;padding:12px;border-radius:7px;background:var(--bg-card);border:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:10px;color:var(--text-lo);">Σ β bruto (suma aportes)</span>
+          <span style="font-size:13px;color:var(--text-mid);font-family:var(--font-head);" id="betaBruta">0.000</span>
+        </div>
+        <div id="betaIncompat" style="display:none;align-items:center;gap:7px;font-size:10px;color:var(--amber);padding:6px 8px;border-radius:5px;background:var(--amber-dim);border:1px solid rgba(255,179,71,0.2);">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span></span>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:8px;display:flex;justify-content:space-between;align-items:baseline;">
+          <span style="font-size:10px;color:var(--text-lo);">β_base resultante → slider</span>
+          <span style="font-size:20px;font-family:var(--font-head);font-weight:700;color:var(--red);" id="betaBase">0.000</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN 4: AMBIENTE ── -->
+    <div class="section-header" onclick="toggleSection('secAmb', this)">
+      <div class="section-icon icon-amber">
+        <svg viewBox="0 0 14 14" fill="none" stroke="#ffb347" stroke-width="1.5" stroke-linecap="round">
+          <circle cx="7" cy="7" r="3"/>
+          <path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M3.1 3.1l1.1 1.1M9.8 9.8l1.1 1.1M9.8 4.2L8.7 5.3M5.3 8.7l-1.1 1.1"/>
+        </svg>
+      </div>
+      <span class="section-title amber">Factores Ambientales</span>
+      <svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M2 4l4 4 4-4"/></svg>
+    </div>
+    <div class="section-body" id="secAmb">
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Temperatura (°C)</span>
+          <span class="param-value amber" id="valTemp">20°C</span>
+        </div>
+        <input type="range" class="amber" id="slTemp" min="-10" max="45" step="1" value="20" oninput="updateSlider('Temp', this.value)">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text-lo)">-10°C</span>
+          <span style="font-size:10px;color:var(--text-lo)">45°C</span>
+        </div>
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Humedad relativa (%)</span>
+          <span class="param-value cyan" id="valHum">50%</span>
+        </div>
+        <input type="range" class="cyan" id="slHum" min="10" max="100" step="1" value="50" oninput="updateSlider('Hum', this.value)">
+      </div>
+
+      <div class="param-row">
+        <div class="param-label">
+          <span class="param-name">Índice UV</span>
+          <span class="param-value amber" id="valUV">3</span>
+        </div>
+        <input type="range" class="amber" id="slUV" min="0" max="11" step="1" value="3" oninput="updateSlider('UV', this.value)">
+        <div style="display:flex;justify-content:space-between;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text-lo)">0 (ninguno)</span>
+          <span style="font-size:10px;color:var(--text-lo)">11 (extremo)</span>
+        </div>
+      </div>
+
+      <div style="padding:10px 12px;border-radius:7px;background:var(--bg-card);border:1px solid var(--border);font-size:11px;">
+        <div style="color:var(--text-lo);margin-bottom:6px;">Factor ambiental resultante</div>
+        <div style="font-size:18px;font-family:var(--font-head);font-weight:700;color:var(--amber);" id="ambFactor">1.00×</div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN 5: INTERVENCIONES ── -->
+    <div class="section-header" onclick="toggleSection('secInt', this)">
+      <div class="section-icon icon-green">
+        <svg viewBox="0 0 14 14" fill="none" stroke="#00e5a0" stroke-width="1.5" stroke-linecap="round">
+          <path d="M7 1L2 4v4c0 2.8 2.2 4.7 5 5.5 2.8-.8 5-2.7 5-5.5V4L7 1z"/>
+        </svg>
+      </div>
+      <span class="section-title green">Intervenciones</span>
+      <svg class="section-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" width="12" height="12"><path d="M2 4l4 4 4-4"/></svg>
+    </div>
+    <div class="section-body" id="secInt">
+
+      <div id="intervGrid">
+        <!-- generado por JS -->
+      </div>
+
+      <div class="param-row" style="margin-top:12px;">
+        <div class="param-label">
+          <span class="param-name">Día de inicio intervención</span>
+          <span class="param-value green" id="valDiaInt">30</span>
+        </div>
+        <input type="range" class="green" id="slDiaInt" min="1" max="360" step="1" value="30" oninput="updateSlider('DiaInt', this.value)">
+      </div>
+    </div>
+
+
+
+    <!-- RUN BUTTON -->
+    <button class="run-btn" id="runBtn" onclick="runSimulacion()">
+      ▶ Ejecutar simulación
+    </button>
+
+    <div style="height:20px;"></div>
+  </aside>
+
+  <!-- ══════════ MAIN PANEL ══════════ -->
+  <main class="main">
+
+    <!-- MÉTRICAS -->
+    <div class="metrics-row">
+      <div class="metric-card cyan">
+        <div class="metric-label">Susceptibles (S)</div>
+        <div class="metric-value cyan" id="mS">—</div>
+        <div class="metric-sub" id="mSpct">—% de N</div>
+      </div>
+      <div class="metric-card red">
+        <div class="metric-label">Infectados pico</div>
+        <div class="metric-value red" id="mIPico">—</div>
+        <div class="metric-sub" id="mDiaPico">día —</div>
+      </div>
+      <div class="metric-card green">
+        <div class="metric-label">Recuperados (R)</div>
+        <div class="metric-value green" id="mR">—</div>
+        <div class="metric-sub" id="mRpct">—% de N</div>
+      </div>
+      <div class="metric-card amber">
+        <div class="metric-label">Total infectados</div>
+        <div class="metric-value amber" id="mTotal">—</div>
+        <div class="metric-sub" id="mTotalPct">—% población</div>
+      </div>
+      <div class="metric-card purple">
+        <div class="metric-label">β efectivo final</div>
+        <div class="metric-value purple" id="mBetaEf">—</div>
+        <div class="metric-sub" id="mGammaShow">γ = —</div>
+      </div>
+    </div>
+
+    <!-- ALERTA -->
+    <div class="alert warn" id="alertHosp">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Atención: el pico de infectados supera la capacidad hospitalaria configurada.
+    </div>
+
+    <!-- GRÁFICO -->
+    <div class="chart-area">
+      <div class="chart-header">
+        <div class="chart-title">Curvas epidémicas — Modelo SIR</div>
+        <div class="chart-legend">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:var(--cyan)"></div>
+            Susceptibles (S)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:var(--red)"></div>
+            Infectados (I)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:var(--green)"></div>
+            Recuperados (R)
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:var(--amber);border-radius:2px;width:16px;height:3px;margin-top:3px;"></div>
+            Cap. hospitalaria
+          </div>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <div class="empty-state" id="emptyState">
+          <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+            <path d="M6 40 Q14 20 22 30 Q30 40 38 10"/>
+            <circle cx="38" cy="10" r="3"/>
+          </svg>
+          <p>Configura los parámetros y<br>ejecuta la simulación para<br>ver las curvas epidémicas.</p>
+        </div>
+        <canvas id="sirChart" style="display:none;"></canvas>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// DATOS DE TRANSMISIÓN
+// ══════════════════════════════════════════════════════════
+// Cada vía tiene:
+//   beta_base   → aporte propio al β cuando está activa
+//   tipo        → 'aditiva' (suma con las demás y aumenta contagio)
+//                 'exclusiva' (rutas muy específicas; no potencian las aditivas,
+//                              pero sí se suman entre sí si ambas están activas)
+//   incompatible→ IDs de vías cuya coexistencia reduce la efectividad
+//                 (ej: fluidos+aérea → patógenos distintos, penalización cruzada)
+const TRANSMISIONES = [
+  { id:'aereo',    nombre:'Aérea / gotículas',        beta_base:0.55, tipo:'aditiva',   incompatible:[],              ejemplos:'COVID, influenza, sarampión' },
+  { id:'aerosol',  nombre:'Aerosol larga distancia',  beta_base:0.40, tipo:'aditiva',   incompatible:[],              ejemplos:'Tuberculosis, COVID-19' },
+  { id:'directo',  nombre:'Contacto directo',         beta_base:0.22, tipo:'aditiva',   incompatible:[],              ejemplos:'Resfriado, gripe' },
+  { id:'fomites',  nombre:'Fómites / superficies',    beta_base:0.15, tipo:'aditiva',   incompatible:[],              ejemplos:'Norovirus, resfriado' },
+  { id:'fecal',    nombre:'Fecal-oral',               beta_base:0.28, tipo:'aditiva',   incompatible:['aereo','aerosol'],  ejemplos:'Cólera, hepatitis A' },
+  { id:'vector',   nombre:'Vector biológico',         beta_base:0.50, tipo:'aditiva',   incompatible:['fluidos','vertical'], ejemplos:'Dengue, malaria, zika' },
+  { id:'piel',     nombre:'Piel a piel',              beta_base:0.13, tipo:'aditiva',   incompatible:[],              ejemplos:'Viruela, herpes zóster' },
+  { id:'fluidos',  nombre:'Fluidos corporales',       beta_base:0.06, tipo:'exclusiva', incompatible:['aereo','aerosol','fecal','vector'], ejemplos:'VIH, hepatitis B' },
+  { id:'vertical', nombre:'Vertical (madre-hijo)',    beta_base:0.05, tipo:'exclusiva', incompatible:['aereo','aerosol','fecal','vector'], ejemplos:'VIH, rubéola, zika' },
+  { id:'zoonosis', nombre:'Zoonótica directa',        beta_base:0.10, tipo:'exclusiva', incompatible:['aereo','aerosol'], ejemplos:'Rabia, ébola' },
+];
+
+// INTERVENCIONES
+const INTERVENCIONES = [
+  { id:'vacunacion',     nombre:'Vacunación masiva',          desc:'Inmuniza fracción adicional de la población', reduction:0.30 },
+  { id:'cuarentena',     nombre:'Cuarentena / confinamiento', desc:'Reduce contactos efectivos entre personas',    reduction:0.60 },
+  { id:'tapabocas',      nombre:'Uso de tapabocas',           desc:'Reduce transmisión aérea y por gotículas',    reduction:0.25 },
+  { id:'distanciamiento',nombre:'Distanciamiento social',     desc:'Reduce la tasa de contacto β',                reduction:0.40 },
+];
+
+// Estado global
+const state = {
+  N: 100000, I0: 10, pVac: 0, dias: 180,
+  beta: 0.30, gamma: 0.10,
+  temp: 20, hum: 50, uv: 3,
+  hospCap: 5000, diaInt: 30,
+  txActivas: new Set(),
+  intervActivas: new Set(),
+
+};
+
+let sirChart = null;
+
+// ══════════════════════════════════════════════════════════
+// INICIALIZACIÓN
+// ══════════════════════════════════════════════════════════
+(function init() {
+  buildTransmision();
+  buildIntervenciones();
+  updateR0();
+  updateAmbFactor();
+})();
+
+function buildTransmision() {
+  const grid = document.getElementById('txGrid');
+  grid.innerHTML = TRANSMISIONES.map(t => {
+    const tipoLabel = t.tipo === 'exclusiva'
+      ? `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,179,71,0.15);color:var(--amber);margin-left:4px;">exclusiva</span>`
+      : `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(0,229,160,0.12);color:var(--green);margin-left:4px;">aditiva</span>`;
+    return `
+    <div class="tx-item" id="tx_${t.id}" onclick="toggleTx('${t.id}')">
+      <div class="tx-check">
+        <svg viewBox="0 0 10 10" fill="none" stroke="var(--bg-void)" stroke-width="2.5" stroke-linecap="round">
+          <path d="M2 5l2.5 2.5L8 3"/>
+        </svg>
+      </div>
+      <div class="tx-info">
+        <div class="tx-name">${t.nombre}${tipoLabel}</div>
+        <div class="tx-beta">β aporte: +${t.beta_base.toFixed(2)} · ${t.ejemplos}</div>
+      </div>
+      <div class="tx-weight" id="txw_${t.id}"></div>
+    </div>`;
+  }).join('');
+}
+
+function buildIntervenciones() {
+  const grid = document.getElementById('intervGrid');
+  grid.innerHTML = INTERVENCIONES.map(v => `
+    <div class="interv-row" id="iv_${v.id}" onclick="toggleInterv('${v.id}')">
+      <div class="interv-toggle"></div>
+      <div class="interv-label">
+        ${v.nombre}
+        <span>${v.desc}</span>
+      </div>
+      <div class="interv-reduction">-${Math.round(v.reduction*100)}% β</div>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// TOGGLE SECCIONES
+// ══════════════════════════════════════════════════════════
+function toggleSection(id, header) {
+  const body = document.getElementById(id);
+  const chevron = header.querySelector('.section-chevron');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open');
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// ══════════════════════════════════════════════════════════
+// SLIDERS
+// ══════════════════════════════════════════════════════════
+function updateSlider(key, val) {
+  const v = parseFloat(val);
+  switch(key) {
+    case 'N':
+      state.N = Math.round(v);
+      document.getElementById('valN').textContent = v >= 1e6
+        ? (v/1e6).toFixed(1)+'M'
+        : v >= 1000 ? (v/1000).toFixed(0)+'K' : v;
+      break;
+    case 'I0':
+      state.I0 = Math.round(v);
+      document.getElementById('valI0').textContent = Math.round(v);
+      break;
+    case 'Vac':
+      state.pVac = v/100;
+      document.getElementById('valVac').textContent = Math.round(v)+'%';
+      break;
+    case 'Dias':
+      state.dias = Math.round(v);
+      document.getElementById('valDias').textContent = Math.round(v);
+      break;
+    case 'Beta':
+      state.beta = v;
+      document.getElementById('valBeta').textContent = v.toFixed(2);
+      updateR0();
+      break;
+    case 'Gamma':
+      state.gamma = v;
+      document.getElementById('valGamma').textContent = v.toFixed(2);
+      document.getElementById('durEnf').textContent = (1/v).toFixed(1)+' días';
+      updateR0();
+      break;
+    case 'Temp':
+      state.temp = v;
+      document.getElementById('valTemp').textContent = Math.round(v)+'°C';
+      updateAmbFactor();
+      break;
+    case 'Hum':
+      state.hum = v;
+      document.getElementById('valHum').textContent = Math.round(v)+'%';
+      updateAmbFactor();
+      break;
+    case 'UV':
+      state.uv = v;
+      document.getElementById('valUV').textContent = Math.round(v);
+      updateAmbFactor();
+      break;
+    case 'DiaInt':
+      state.diaInt = Math.round(v);
+      document.getElementById('valDiaInt').textContent = Math.round(v);
+      break;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// R0
+// ══════════════════════════════════════════════════════════
+function updateR0() {
+  const r0 = state.beta / state.gamma;
+  const display = document.getElementById('r0Display');
+  const bar = document.getElementById('r0Bar');
+  display.textContent = r0.toFixed(2);
+  display.style.color = r0 < 1 ? 'var(--green)' : r0 < 2 ? 'var(--amber)' : 'var(--red)';
+  const pct = Math.min(r0 / 5 * 100, 100);
+  bar.style.width = pct + '%';
+}
+
+// ══════════════════════════════════════════════════════════
+// TRANSMISIÓN
+// ══════════════════════════════════════════════════════════
+function toggleTx(id) {
+  const el = document.getElementById('tx_'+id);
+  if (state.txActivas.has(id)) {
+    state.txActivas.delete(id);
+    el.classList.remove('active');
+  } else {
+    state.txActivas.add(id);
+    el.classList.add('active');
+  }
+  recalcBetaBase();
+}
+
+function recalcBetaBase() {
+  const activas = TRANSMISIONES.filter(t => state.txActivas.has(t.id));
+  if (activas.length === 0) {
+    document.getElementById('betaBase').textContent = '0.000';
+    document.getElementById('betaIncompat').style.display = 'none';
+    return;
+  }
+
+  // 1. Suma directa de aportes — más vías = más contagioso
+  let betaBruta = 0;
+  activas.forEach(t => { betaBruta += t.beta_base; });
+
+  // 2. Penalización por pares incompatibles activos simultáneamente
+  //    Cada par incompatible activo reduce un 15% el β bruto
+  //    (representan que el patógeno no puede ser eficiente en rutas biológicamente opuestas)
+  let penalidadPares = 0;
+  const activasIds = new Set(state.txActivas);
+  activas.forEach(t => {
+    t.incompatible.forEach(otherId => {
+      if (activasIds.has(otherId)) {
+        // Solo contamos cada par una vez (A→B y B→A son el mismo par)
+        if (t.id < otherId) penalidadPares++;
+      }
+    });
+  });
+
+  const factorPenalizacion = Math.max(0.5, 1 - penalidadPares * 0.15);
+  const betaFinal = Math.min(betaBruta * factorPenalizacion, 1.0);
+
+  // Mostrar aportes individuales en cada ítem
+  activas.forEach(t => {
+    const wEl = document.getElementById('txw_'+t.id);
+    if (wEl) wEl.textContent = '+'+t.beta_base.toFixed(2);
+  });
+
+  // Mostrar advertencia de incompatibilidad
+  const incompat = document.getElementById('betaIncompat');
+  if (penalidadPares > 0) {
+    incompat.style.display = 'flex';
+    incompat.querySelector('span').textContent =
+      penalidadPares + ' par' + (penalidadPares > 1 ? 'es' : '') +
+      ' incompatible' + (penalidadPares > 1 ? 's' : '') +
+      ' detectado' + (penalidadPares > 1 ? 's' : '') +
+      ' → penalización ×' + factorPenalizacion.toFixed(2);
+  } else {
+    incompat.style.display = 'none';
+  }
+
+  document.getElementById('betaBase').textContent = betaFinal.toFixed(3);
+  document.getElementById('betaBruta').textContent = betaBruta.toFixed(3);
+
+  // Actualizar slider β con el valor calculado
+  state.beta = parseFloat(betaFinal.toFixed(3));
+  document.getElementById('slBeta').value = Math.min(state.beta, 1.0);
+  document.getElementById('valBeta').textContent = state.beta.toFixed(3);
+  updateR0();
+}
+
+// ══════════════════════════════════════════════════════════
+// FACTORES AMBIENTALES
+// ══════════════════════════════════════════════════════════
+function updateAmbFactor() {
+  const t = state.temp, h = state.hum, uv = state.uv;
+  // Factor temperatura (virus respiratorios por defecto)
+  let fT = 1.0;
+  if (t < 5) fT = 1.25;
+  else if (t < 15) fT = 1.15;
+  else if (t < 25) fT = 1.0;
+  else if (t < 35) fT = 0.85;
+  else fT = 0.70;
+  // Factor humedad
+  let fH = 1.0;
+  if (h < 30) fH = 1.20;
+  else if (h < 50) fH = 1.05;
+  else if (h < 70) fH = 1.0;
+  else fH = 0.90;
+  // Factor UV
+  const fUV = Math.max(0.60, 1.0 - uv * 0.04);
+  const total = fT * fH * fUV;
+  document.getElementById('ambFactor').textContent = total.toFixed(3)+'×';
+  state.ambFactor = total;
+}
+
+// ══════════════════════════════════════════════════════════
+// INTERVENCIONES
+// ══════════════════════════════════════════════════════════
+function toggleInterv(id) {
+  const el = document.getElementById('iv_'+id);
+  if (state.intervActivas.has(id)) {
+    state.intervActivas.delete(id);
+    el.classList.remove('active');
+  } else {
+    state.intervActivas.add(id);
+    el.classList.add('active');
+  }
+}
+
+
+
+// ══════════════════════════════════════════════════════════
+// SIMULACIÓN → FLASK
+// ══════════════════════════════════════════════════════════
+async function runSimulacion() {
+  const btn = document.getElementById('runBtn');
+  btn.textContent = '⟳ Calculando...';
+  btn.classList.add('loading');
+
+  // Calcular reducción total por intervenciones
+  let reductionFactor = 1.0;
+  INTERVENCIONES.forEach(iv => {
+    if (state.intervActivas.has(iv.id)) {
+      reductionFactor *= (1 - iv.reduction);
+    }
+  });
+
+  // β efectivo = beta × factorAmbiental × factorIntervención
+  const ambFactor = state.ambFactor || 1.0;
+  const betaEfectivo = Math.min(state.beta * ambFactor * reductionFactor, 1.0);
+
+  const payload = {
+    N:          state.N,
+    I0:         state.I0,
+    p_vac:      state.pVac,
+    dias:       state.dias,
+    beta:       parseFloat(betaEfectivo.toFixed(4)),
+    gamma:      parseFloat(state.gamma.toFixed(4)),
+    hosp_cap:   parseInt(document.getElementById('hospCap').value) || 0,
+    dia_intervencion: state.diaInt,
+    intervenciones: Array.from(state.intervActivas),
+    temp:       state.temp,
+    humedad:    state.hum,
+    uv:         state.uv,
+    factor_ambiental: parseFloat(ambFactor.toFixed(4)),
+    factor_intervencion: parseFloat(reductionFactor.toFixed(4)),
+  };
+
+  try {
+    const res = await fetch('/simular', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('Error del servidor: ' + res.status);
+    const data = await res.json();
+    renderResultados(data, payload);
+    btn.textContent = '▶ Ejecutar simulación';
+    btn.classList.remove('loading');
+  } catch(e) {
+    console.error(e);
+    btn.textContent = '✗ Error: ' + e.message;
+    btn.style.color = 'var(--red)';
+    btn.style.borderColor = 'var(--red)';
+    setTimeout(() => {
+      btn.textContent = '▶ Ejecutar simulación';
+      btn.classList.remove('loading');
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }, 5000);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER RESULTADOS
+// ══════════════════════════════════════════════════════════
+function renderResultados(data, payload) {
+  const { t, S, I, R } = data;
+  const N = payload.N;
+
+  // Pico de infectados
+  const iPico = Math.max(...I);
+  const diaPico = t[I.indexOf(iPico)];
+  const totalInf = N - S[S.length-1];
+  const sFinal = S[S.length-1];
+  const rFinal = R[R.length-1];
+
+  // Métricas
+  document.getElementById('mS').textContent = fmt(sFinal);
+  document.getElementById('mSpct').textContent = (sFinal/N*100).toFixed(1)+'% de N';
+  document.getElementById('mIPico').textContent = fmt(iPico);
+  document.getElementById('mDiaPico').textContent = 'día ' + Math.round(diaPico);
+  document.getElementById('mR').textContent = fmt(rFinal);
+  document.getElementById('mRpct').textContent = (rFinal/N*100).toFixed(1)+'% de N';
+  document.getElementById('mTotal').textContent = fmt(totalInf);
+  document.getElementById('mTotalPct').textContent = (totalInf/N*100).toFixed(1)+'% población';
+  document.getElementById('mBetaEf').textContent = payload.beta.toFixed(3);
+  document.getElementById('mGammaShow').textContent = 'γ = '+payload.gamma.toFixed(3);
+
+  // Alerta hospitalaria
+  const hospCap = payload.hosp_cap;
+  const alertEl = document.getElementById('alertHosp');
+  alertEl.className = 'alert' + (hospCap > 0 && iPico > hospCap ? ' show warn' : '');
+
+  // Línea capacidad hospitalaria
+  const hospLine = hospCap > 0 ? Array(t.length).fill(hospCap) : null;
+
+  // Gráfico
+  document.getElementById('emptyState').style.display = 'none';
+  const canvas = document.getElementById('sirChart');
+  canvas.style.display = 'block';
+
+  if (sirChart) sirChart.destroy();
+
+  const ctx = canvas.getContext('2d');
+  const datasets = [
+    {
+      label: 'Susceptibles (S)',
+      data: t.map((ti, i) => ({ x: ti, y: S[i] })),
+      borderColor: '#00c8ff',
+      backgroundColor: 'rgba(0,200,255,0.04)',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.4,
+      fill: false,
+    },
+    {
+      label: 'Infectados (I)',
+      data: t.map((ti, i) => ({ x: ti, y: I[i] })),
+      borderColor: '#ff4d6d',
+      backgroundColor: 'rgba(255,77,109,0.07)',
+      borderWidth: 2.5,
+      pointRadius: 0,
+      tension: 0.4,
+      fill: true,
+    },
+    {
+      label: 'Recuperados (R)',
+      data: t.map((ti, i) => ({ x: ti, y: R[i] })),
+      borderColor: '#00e5a0',
+      backgroundColor: 'rgba(0,229,160,0.04)',
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.4,
+      fill: false,
+    },
+  ];
+
+  if (hospLine) {
+    datasets.push({
+      label: 'Cap. hospitalaria',
+      data: t.map((ti, i) => ({ x: ti, y: hospLine[i] })),
+      borderColor: '#ffb347',
+      borderWidth: 1.5,
+      borderDash: [6, 4],
+      pointRadius: 0,
+      fill: false,
+    });
+  }
+
+  sirChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets },
+    options: {
+      animation: { duration: 600, easing: 'easeInOutQuart' },
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(8,13,26,0.95)',
+          borderColor: 'rgba(0,200,255,0.2)',
+          borderWidth: 1,
+          titleColor: '#7a9bb5',
+          bodyColor: '#e8f4ff',
+          titleFont: { family: "'Space Mono', monospace", size: 11 },
+          bodyFont: { family: "'Space Mono', monospace", size: 11 },
+          callbacks: {
+            title: items => 'Día ' + Math.round(items[0].parsed.x),
+            label: item => ' ' + item.dataset.label + ': ' + fmt(Math.round(item.parsed.y)),
+          }
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Días', color: '#3d5a72', font: { family: "'Space Mono', monospace", size: 11 } },
+          grid: { color: 'rgba(0,200,255,0.05)' },
+          ticks: { color: '#3d5a72', font: { family: "'Space Mono', monospace", size: 10 } },
+        },
+        y: {
+          title: { display: true, text: 'Personas', color: '#3d5a72', font: { family: "'Space Mono', monospace", size: 11 } },
+          grid: { color: 'rgba(0,200,255,0.05)' },
+          ticks: {
+            color: '#3d5a72',
+            font: { family: "'Space Mono', monospace", size: 10 },
+            callback: v => v >= 1e6 ? (v/1e6).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v,
+          },
+        }
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILIDADES
+// ══════════════════════════════════════════════════════════
+function fmt(n) {
+  if (n >= 1e6) return (n/1e6).toFixed(2)+'M';
+  if (n >= 1000) return (n/1000).toFixed(1)+'K';
+  return Math.round(n).toString();
+}
+
+// Init ambient factor state
+state.ambFactor = 1.0;
+updateAmbFactor();
+</script>
+</body>
+</html>
