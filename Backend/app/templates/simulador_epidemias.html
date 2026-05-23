@@ -1275,7 +1275,7 @@ function recalcBetaBase() {
   });
 
   const factorPenalizacion = Math.max(0.5, 1 - penalidadPares * 0.15);
-  const betaFinal = Math.min(betaBruta * factorPenalizacion, 1.0);
+  const betaFinal = Math.min(betaBruta * factorPenalizacion, 2.5);
 
   // Mostrar aportes individuales en cada ítem
   activas.forEach(t => {
@@ -1301,7 +1301,7 @@ function recalcBetaBase() {
 
   // Actualizar slider β con el valor calculado
   state.beta = parseFloat(betaFinal.toFixed(3));
-  document.getElementById('slBeta').value = Math.min(state.beta, 1.0);
+  document.getElementById('slBeta').value = Math.min(state.beta, 2.5);
   document.getElementById('valBeta').textContent = state.beta.toFixed(3);
   updateR0();
 }
